@@ -1,0 +1,20 @@
+{
+    "posts": [
+        {
+            "author": "Max",
+            "title": "Post 1"
+        },
+        {
+            "author": "Jack",
+            "title": "Post 2"
+        },
+        {
+            "author": "Jhon",
+            "title": "Post 3"
+        },
+        {
+            "author": "Jake",
+            "title": "Post 4"
+        }
+    ]
+}
