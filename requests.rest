@@ -1,5 +1,5 @@
 GET http://localhost:3000/users
-
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiS2lsZTAiLCJpYXQiOjE3MDkyMTk5NzYsImV4cCI6MTcwOTIyMDAwNn0.KKX-BFbEtHxwoqvPmeibY63eOn8FVdRoW4Vp3SuVHnM
 ###
 
 POST http://localhost:3000/signUp
@@ -12,6 +12,23 @@ Content-Type: application/json
 
 ###
 
+POST http://localhost:3000/token
+Content-Type: application/json
+
+{
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiS2lsZTEiLCJpYXQiOjE3MDg4NjkxNzUsImV4cCI6MTcwODk1NTU3NX0.YFmkio-XOj8izLK_Gi3qcgey_x_TOhWWKwJVbf0RdZw"
+}
+
+###
+
+DELETE http://localhost:3000/logout
+Content-Type: application/json
+
+{
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiS2lsZTAiLCJpYXQiOjE3MDkyMTk5MjcsImV4cCI6MTcwOTMwNjMyN30.JZt96nv0JlDMk3yT7OiezxUw6kDTFp_E7H-J1yMqkus"
+}
+
+###
 POST http://localhost:3000/signIn
 Content-Type: application/json
 
