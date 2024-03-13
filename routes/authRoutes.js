@@ -3,9 +3,11 @@ const authRouter = express.Router();
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const generateAccessToken = require("../utils/generateAccessToken");
-const router = require("./routes");
+const generateToken = require("../utils/generateToken");
+const dayjs = require("dayjs");
+const cryptor = require("../utils/cryptor");
 
+//Log in route
 authRouter.post("/signIn", async (req, res) => {
   if (!req.body.username || !req.body.password) {
     return res.status(400).send("Wrong credentials");
@@ -20,10 +22,16 @@ authRouter.post("/signIn", async (req, res) => {
     if (await bcrypt.compare(req.body.password, user.password)) {
       const user = { name: req.body.username };
 
-      const accessToken = generateAccessToken(user);
-      const refreshToken = jwt.sign(user, process.env.REFRESH_TOKEN_SECRET, {
-        expiresIn: "24h",
-      });
+      const accessToken = generateToken(
+        user,
+        process.env.ACCESS_TOKEN_SECRET,
+        "30m"
+      );
+      const refreshToken = generateToken(
+        user,
+        process.env.REFRESH_TOKEN_SECRET,
+        "24h"
+      );
 
       const refreshTokensCol = mongoose.connection.db.collection("sessions");
 
@@ -39,14 +47,34 @@ authRouter.post("/signIn", async (req, res) => {
 
       refreshTokensCol.insertOne({ t: refreshToken, owner: user.name });
 
-      res.status(200).json({ accessToken, refreshToken });
+      const encodedRefreshToken = cryptor.encrypt(
+        refreshToken,
+        process.env.COOKIES_SECRET
+      );
+
+      res.cookie(
+        "secureCookie",
+        JSON.stringify({
+          rToken: encodedRefreshToken,
+        }),
+        {
+          httpOnly: true,
+          expires: dayjs().add(7, "d").toDate(),
+          secure: true,
+          sameSite: "lax",
+        }
+      );
+      res.sendStatus(200);
     } else {
       return res.status(400).send("Incorrect user or password");
     }
-  } catch {
-    return res.status(500).send();
+  } catch (error) {
+    console.log(error);
+    return res.sendStatus(500);
   }
 });
+
+//Registration route
 
 authRouter.post("/signUp", async (req, res) => {
   try {
@@ -74,32 +102,60 @@ authRouter.post("/signUp", async (req, res) => {
         res.status(500).send("Here is an error when creating a user");
       });
   } catch (error) {
-    return res.status(500).send(`${error}`);
+    console.log(error);
+    return res.sendStatus(500);
   }
 });
+
+// Refresh token route
 
 authRouter.post("/token", async (req, res) => {
-  const refreshToken = req.body.token;
-  if (refreshToken === null) return res.sendStatus(401);
+  try {
+    const cookies = req.cookies;
+    if (!cookies) return res.sendStatus(401);
 
-  const refreshTokensCol = mongoose.connection.db.collection("sessions");
+    if (dayjs().isAfter(cookies.Expires)) return res.sendStatus(403);
 
-  const refreshTokensArr = await refreshTokensCol
-    .find({
-      t: refreshToken,
-    })
-    .toArray();
+    const { rToken } = JSON.parse(cookies.secureCookie);
+    if (!rToken) return res.sendStatus(401);
 
-  if (!refreshTokensArr.length) {
-    return res.sendStatus(403);
+    const decodedRefreshToken = cryptor.decrypt(
+      rToken,
+      process.env.COOKIES_SECRET
+    );
+
+    const refreshTokensCol = mongoose.connection.db.collection("sessions");
+
+    const refreshTokensArr = await refreshTokensCol
+      .find({
+        t: decodedRefreshToken,
+      })
+      .toArray();
+
+    if (!refreshTokensArr.length) {
+      return res.sendStatus(403);
+    }
+
+    jwt.verify(
+      decodedRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET,
+      (err, user) => {
+        if (err) return res.sendStatus(403);
+        const accessToken = generateToken(
+          { name: user.name },
+          process.env.ACCESS_TOKEN_SECRET,
+          "30m"
+        );
+        return res.json({ accessToken });
+      }
+    );
+  } catch (error) {
+    console.log(error);
+    return res.sendStatus(500);
   }
-
-  jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    const accessToken = generateAccessToken({ name: user.name });
-    return res.json({ accessToken });
-  });
 });
+
+//Log out route
 
 authRouter.delete("/logout", async (req, res) => {
   const refreshTokensCol = mongoose.connection.db.collection("sessions");
@@ -112,7 +168,7 @@ authRouter.delete("/logout", async (req, res) => {
       if (refreshToken) refreshTokensCol.deleteOne({ t: req.body.token });
     })
     .then(() => {
-      res.sendStatus(204);
+      res.status(204).send("Logged out successfully");
     });
 });
 
