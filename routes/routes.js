@@ -3,11 +3,6 @@ const router = express.Router();
 const mongoose = require("mongoose");
 const authenticateToken = require("../utils/authenticateToken");
 
-// TODO check auth
-// router.get("/", (req, res) => {
-
-// })
-
 router.get("/users", authenticateToken, async (req, res) => {
   const usersCol = mongoose.connection.db.collection("users");
   const users = await usersCol.find({}).toArray();

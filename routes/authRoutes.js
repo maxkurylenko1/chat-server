@@ -52,19 +52,21 @@ authRouter.post("/signIn", async (req, res) => {
         process.env.COOKIES_SECRET
       );
 
-      res.cookie(
-        "secureCookie",
-        JSON.stringify({
-          rToken: encodedRefreshToken,
-        }),
-        {
-          httpOnly: true,
-          expires: dayjs().add(7, "d").toDate(),
-          secure: true,
-          sameSite: "lax",
-        }
-      );
-      res.sendStatus(200);
+      return res
+        .cookie(
+          "secureCookie",
+          JSON.stringify({
+            rToken: encodedRefreshToken,
+          }),
+          {
+            httpOnly: true,
+            expires: dayjs().add(7, "d").toDate(),
+            secure: true,
+            sameSite: "lax",
+          }
+        )
+        .json({ accessToken })
+        .status(200);
     } else {
       return res.status(400).send("Incorrect user or password");
     }
