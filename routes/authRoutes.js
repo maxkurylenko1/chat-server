@@ -7,6 +7,13 @@ const generateToken = require("../utils/generateToken");
 const dayjs = require("dayjs");
 const cryptor = require("../utils/cryptor");
 
+const cookiesConfig = {
+  httpOnly: true,
+  expires: dayjs().add(7, "d").toDate(),
+  secure: true,
+  sameSite: "lax",
+};
+
 //Log in route
 authRouter.post("/signIn", async (req, res) => {
   if (!req.body.username || !req.body.password) {
@@ -20,15 +27,15 @@ authRouter.post("/signIn", async (req, res) => {
     }
 
     if (await bcrypt.compare(req.body.password, user.password)) {
-      const user = { name: req.body.username };
+      const userInfo = { name: req.body.username, id: user._id };
 
       const accessToken = generateToken(
-        user,
+        userInfo,
         process.env.ACCESS_TOKEN_SECRET,
-        "30m"
+        "1m"
       );
       const refreshToken = generateToken(
-        user,
+        userInfo,
         process.env.REFRESH_TOKEN_SECRET,
         "24h"
       );
@@ -37,15 +44,15 @@ authRouter.post("/signIn", async (req, res) => {
 
       await refreshTokensCol
         .find({
-          owner: user.name,
+          owner: userInfo.name,
         })
         .toArray()
         .then((refreshTokensArr) => {
           if (refreshTokensArr.length)
-            refreshTokensCol.deleteMany({ owner: user.name });
+            refreshTokensCol.deleteMany({ owner: userInfo.name });
         });
 
-      refreshTokensCol.insertOne({ t: refreshToken, owner: user.name });
+      refreshTokensCol.insertOne({ t: refreshToken, owner: userInfo.name });
 
       const encodedRefreshToken = cryptor.encrypt(
         refreshToken,
@@ -58,12 +65,7 @@ authRouter.post("/signIn", async (req, res) => {
           JSON.stringify({
             rToken: encodedRefreshToken,
           }),
-          {
-            httpOnly: true,
-            expires: dayjs().add(7, "d").toDate(),
-            secure: true,
-            sameSite: "lax",
-          }
+          cookiesConfig
         )
         .json({ accessToken })
         .status(200);
@@ -114,6 +116,7 @@ authRouter.post("/signUp", async (req, res) => {
 authRouter.post("/token", async (req, res) => {
   try {
     const cookies = req.cookies;
+
     if (!cookies) return res.sendStatus(401);
 
     if (dayjs().isAfter(cookies.Expires)) return res.sendStatus(403);
@@ -146,9 +149,9 @@ authRouter.post("/token", async (req, res) => {
         const accessToken = generateToken(
           { name: user.name },
           process.env.ACCESS_TOKEN_SECRET,
-          "30m"
+          "1m"
         );
-        return res.json({ accessToken });
+        return res.json({ accessToken }).status(200);
       }
     );
   } catch (error) {
@@ -162,12 +165,20 @@ authRouter.post("/token", async (req, res) => {
 authRouter.delete("/logout", async (req, res) => {
   const refreshTokensCol = mongoose.connection.db.collection("sessions");
 
+  const cookies = req.cookies;
+  const { rToken } = JSON.parse(cookies.secureCookie);
+
+  const decodedRefreshToken = cryptor.decrypt(
+    rToken,
+    process.env.COOKIES_SECRET
+  );
+
   await refreshTokensCol
     .findOne({
-      t: req.body.token,
+      t: decodedRefreshToken,
     })
     .then((refreshToken) => {
-      if (refreshToken) refreshTokensCol.deleteOne({ t: req.body.token });
+      if (refreshToken) refreshTokensCol.deleteOne({ t: refreshToken.t });
     })
     .then(() => {
       res.status(204).send("Logged out successfully");
